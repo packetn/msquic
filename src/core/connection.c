@@ -66,7 +66,7 @@ QuicConnAlloc(
     )
 {
     BOOLEAN IsServer = Datagram != NULL;
-    uint32_t CurProcIndex = CxPlatProcCurrentNumber();
+    uint32_t CurProcIndex = CxPlatProcCurrentNumber() % MsQuicLib.ProcessorCount;
 
     //
     // For client, the datapath partitioning info is not known yet, so just use

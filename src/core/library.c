@@ -2015,7 +2015,7 @@ QuicLibraryGenerateStatelessResetToken(
     )
 {
     uint8_t HashOutput[CXPLAT_HASH_SHA256_SIZE];
-    uint32_t CurProcIndex = CxPlatProcCurrentNumber();
+    uint32_t CurProcIndex = CxPlatProcCurrentNumber() % MsQuicLib.ProcessorCount;
     CxPlatLockAcquire(&MsQuicLib.PerProc[CurProcIndex].ResetTokenLock);
     QUIC_STATUS Status =
         CxPlatHashCompute(
