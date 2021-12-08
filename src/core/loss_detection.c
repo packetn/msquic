@@ -486,7 +486,7 @@ QuicLossDetectionOnPacketAcknowledged(
         EncryptLevel >= QUIC_ENCRYPT_LEVEL_INITIAL &&
         EncryptLevel < QUIC_ENCRYPT_LEVEL_COUNT);
 
-    if (!QuicConnIsServer(Connection) &&
+    if (QuicConnIsClient(Connection) &&
         !Connection->State.HandshakeConfirmed &&
         Packet->Flags.KeyType == QUIC_PACKET_KEY_1_RTT) {
         QuicTraceLogConnInfo(
@@ -581,7 +581,8 @@ QuicLossDetectionOnPacketAcknowledged(
             if (DestCid != NULL) {
 #pragma prefast(suppress:6001, "TODO - Why does compiler think: Using uninitialized memory '*DestCid'")
                 CXPLAT_DBG_ASSERT(DestCid->CID.Retired);
-                QUIC_CID_VALIDATE_NULL(DestCid);
+                CXPLAT_DBG_ASSERT(Path == NULL || Path->DestCid != DestCid);
+                QUIC_CID_VALIDATE_NULL(Connection, DestCid);
                 CXPLAT_FREE(DestCid, QUIC_POOL_CIDLIST);
             }
             break;
@@ -602,7 +603,7 @@ QuicLossDetectionOnPacketAcknowledged(
     if (Path != NULL) {
         uint16_t PacketMtu =
             PacketSizeFromUdpPayloadSize(
-                QuicAddrGetFamily(&Path->RemoteAddress),
+                QuicAddrGetFamily(&Path->Route.RemoteAddress),
                 Packet->PacketLength);
         BOOLEAN ChangedMtu = FALSE;
         if (!Path->IsMinMtuValidated &&
@@ -767,7 +768,7 @@ QuicLossDetectionRetransmitFrames(
                     FALSE);
             if (DestCid != NULL) {
                 CXPLAT_DBG_ASSERT(DestCid->CID.Retired);
-                QUIC_CID_VALIDATE_NULL(DestCid);
+                QUIC_CID_VALIDATE_NULL(Connection, DestCid);
                 DestCid->CID.NeedsToSend = TRUE;
                 NewDataQueued |=
                     QuicSendSetSendFlag(
@@ -792,6 +793,7 @@ QuicLossDetectionRetransmitFrames(
                         Connection,
                         "Path[%hhu] validation timed out",
                         Path->ID);
+                    QuicPerfCounterIncrement(QUIC_PERF_COUNTER_PATH_FAILURE);
                     QuicPathRemove(Connection, PathIndex);
                 } else {
                     Path->SendChallenge = TRUE;
@@ -868,7 +870,7 @@ QuicLossDetectionOnPacketDiscarded(
             if (Path != NULL) {
                 uint16_t PacketMtu =
                     PacketSizeFromUdpPayloadSize(
-                        QuicAddrGetFamily(&Path->RemoteAddress),
+                        QuicAddrGetFamily(&Path->Route.RemoteAddress),
                         Packet->PacketLength);
                 QuicMtuDiscoveryProbePacketDiscarded(&Path->MtuDiscovery, Connection, PacketMtu);
             }
@@ -1023,12 +1025,16 @@ QuicLossDetectionDetectAndHandleLostPackets(
                 //
                 QuicConnUpdatePeerPacketTolerance(Connection, QUIC_MIN_ACK_SEND_NUMBER);
             }
-            QuicCongestionControlOnDataLost(
-                &Connection->CongestionControl,
-                LargestLostPacketNumber,
-                LossDetection->LargestSentPacketNumber,
-                LostRetransmittableBytes,
-                LossDetection->ProbeCount > QUIC_PERSISTENT_CONGESTION_THRESHOLD);
+            
+            QUIC_LOSS_EVENT LossEvent = {
+                .LargestPacketNumberLost = LargestLostPacketNumber,
+                .LargestPacketNumberSent = LossDetection->LargestSentPacketNumber,
+                .NumRetransmittableBytes = LostRetransmittableBytes,
+                .PersistentCongestion = 
+                    LossDetection->ProbeCount > QUIC_PERSISTENT_CONGESTION_THRESHOLD
+            };
+            
+            QuicCongestionControlOnDataLost(&Connection->CongestionControl, &LossEvent);
             //
             // Send packets from any previously blocked streams.
             //
@@ -1151,12 +1157,15 @@ QuicLossDetectionDiscardPackets(
 
     if (AckedRetransmittableBytes > 0) {
         const QUIC_PATH* Path = &Connection->Paths[0]; // TODO - Correct?
-        if (QuicCongestionControlOnDataAcknowledged(
-                &Connection->CongestionControl,
-                US_TO_MS(TimeNow),
-                LossDetection->LargestAck,
-                AckedRetransmittableBytes,
-                Path->SmoothedRtt)) {
+
+        QUIC_ACK_EVENT AckEvent = {
+            .TimeNow = TimeNow,
+            .LargestPacketNumberAcked = LossDetection->LargestAck,
+            .NumRetransmittableBytes = AckedRetransmittableBytes,
+            .SmoothedRtt = Path->SmoothedRtt
+        };
+
+        if (QuicCongestionControlOnDataAcknowledged(&Connection->CongestionControl, &AckEvent)) {
             //
             // We were previously blocked and are now unblocked.
             //
@@ -1432,12 +1441,14 @@ QuicLossDetectionProcessAckBlocks(
     }
 
     if (NewLargestAck || AckedRetransmittableBytes > 0) {
-        if (QuicCongestionControlOnDataAcknowledged(
-                &Connection->CongestionControl,
-                US_TO_MS(TimeNow),
-                LossDetection->LargestAck,
-                AckedRetransmittableBytes,
-                Connection->Paths[0].SmoothedRtt)) {
+        QUIC_ACK_EVENT AckEvent = {
+            .TimeNow = TimeNow,
+            .LargestPacketNumberAcked = LossDetection->LargestAck,
+            .NumRetransmittableBytes = AckedRetransmittableBytes,
+            .SmoothedRtt = Connection->Paths[0].SmoothedRtt
+        };
+
+        if (QuicCongestionControlOnDataAcknowledged(&Connection->CongestionControl, &AckEvent)) {
             //
             // We were previously blocked and are now unblocked.
             //

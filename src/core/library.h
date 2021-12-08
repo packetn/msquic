@@ -5,6 +5,10 @@
 
 --*/
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 //
 // The different possible types of handles.
 //
@@ -414,13 +418,12 @@ _IRQL_requires_max_(PASSIVE_LEVEL) QUIC_STATUS
 //
 // Get the binding for the addresses.
 //
-_IRQL_requires_max_(PASSIVE_LEVEL) QUIC_STATUS QuicLibraryGetBinding(
-#ifdef QUIC_COMPARTMENT_ID
-    _In_ QUIC_COMPARTMENT_ID CompartmentId,
-#endif
-    _In_ BOOLEAN ShareBinding, _In_ BOOLEAN ServerOwned,
-    _In_opt_ const QUIC_ADDR* LocalAddress,
-    _In_opt_ const QUIC_ADDR* RemoteAddress, _Out_ QUIC_BINDING** NewBinding);
+_IRQL_requires_max_(PASSIVE_LEVEL)
+QUIC_STATUS
+QuicLibraryGetBinding(
+    _In_ const CXPLAT_UDP_CONFIG* UdpConfig,
+    _Out_ QUIC_BINDING** NewBinding
+    );
 
 //
 // Tries to acquire a ref on the binding. Fails if already starting the clean up
@@ -478,8 +481,15 @@ _IRQL_requires_max_(
 //
 // Generates a stateless reset token for the given connection ID.
 //
-_IRQL_requires_max_(PASSIVE_LEVEL) QUIC_STATUS
-    QuicLibraryGenerateStatelessResetToken(
-        _In_reads_(MsQuicLib.CidTotalLength) const uint8_t* const CID,
-        _Out_writes_all_(QUIC_STATELESS_RESET_TOKEN_LENGTH)
-            uint8_t* ResetToken);
+_IRQL_requires_max_(PASSIVE_LEVEL)
+QUIC_STATUS
+QuicLibraryGenerateStatelessResetToken(
+    _In_reads_(MsQuicLib.CidTotalLength)
+        const uint8_t* const CID,
+    _Out_writes_all_(QUIC_STATELESS_RESET_TOKEN_LENGTH)
+        uint8_t* ResetToken
+    );
+
+#if defined(__cplusplus)
+}
+#endif

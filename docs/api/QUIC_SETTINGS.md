@@ -109,7 +109,7 @@ How long a handshake can idle before it is discarded.
 
 `IdleTimeoutMs`
 
-How long a connection can go idle before it is gracefully shut down.
+How long a connection can go idle before it is gracefully shut down. 0 to disable timeout.
 
 **Default value:** 30,000
 
@@ -271,27 +271,27 @@ Number of QUIC protocol versions in the DesiredVersionsList. Must be set to 0 un
 
 `MinimumMtu`
 
-TODO
+The minimum MTU supported by a connection. This will be used as the starting MTU.
 
-**Default value:** TODO
+**Default value:** 1248
 
 `MaximumMtu`
 
-TODO
+The maximum MTU supported by a connection. This will be the maximum probed value.
 
-**Default value:** TODO
+**Default value:** 1500
 
 `MtuDiscoverySearchCompleteTimeoutUs`
 
-TODO
+The time in microseconds to wait before reattempting MTU probing if max was not reached.
 
-**Default value:** TODO
+**Default value:** 600000000
 
 `MtuDiscoveryMissingProbeCount`
 
-TODO
+The number of MTU probes to retry before exiting MTU probing.
 
-**Default value:** TODO
+**Default value:** 3
 
 `MaxBindingStatelessOperations`
 

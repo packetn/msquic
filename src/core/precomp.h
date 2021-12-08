@@ -36,10 +36,6 @@
 #define QUIC_VERSION_ONLY 1
 #include "msquic.ver"
 
-#if defined(__cplusplus)
-extern "C" {
-#endif
-
 //
 // Internal Core Headers.
 //
@@ -77,7 +73,4 @@ extern "C" {
 #include "connection.h"
 #include "packet_builder.h"
 #include "listener.h"
-
-#if defined(__cplusplus)
-}
-#endif
+#include "cubic.h"

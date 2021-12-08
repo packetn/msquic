@@ -120,66 +120,51 @@ struct _ENUM_FLAG_SIZED_INTEGER {
 
 #ifndef ENOKEY  // undefined om macOS
 #define ENOKEY 126
-#endif  // ENOKEY
+#endif // ENOKEY
 
-#define ERROR_BASE 200000000              // 0xBEBC200
-#define TLS_ERROR_BASE 256 + ERROR_BASE   // 0xBEBC300
-#define CERT_ERROR_BASE 512 + ERROR_BASE  // 0xBEBC400
+#define ERROR_BASE                          200000000                       // 0xBEBC200
+#define TLS_ERROR_BASE                      256 + ERROR_BASE                // 0xBEBC300
+#define CERT_ERROR_BASE                     512 + ERROR_BASE                // 0xBEBC400
 
-#define QUIC_STATUS_SUCCESS ((QUIC_STATUS)0)                 // 0
-#define QUIC_STATUS_PENDING ((QUIC_STATUS)-2)                // -2
-#define QUIC_STATUS_CONTINUE ((QUIC_STATUS)-1)               // -1
-#define QUIC_STATUS_OUT_OF_MEMORY ((QUIC_STATUS)ENOMEM)      // 12
-#define QUIC_STATUS_INVALID_PARAMETER ((QUIC_STATUS)EINVAL)  // 22
-#define QUIC_STATUS_INVALID_STATE ((QUIC_STATUS)EPERM)       // 1
-#define QUIC_STATUS_NOT_SUPPORTED \
-  ((QUIC_STATUS)EOPNOTSUPP)                          // 95   (102 on macOS)
-#define QUIC_STATUS_NOT_FOUND ((QUIC_STATUS)ENOENT)  // 2
-#define QUIC_STATUS_BUFFER_TOO_SMALL \
-  ((QUIC_STATUS)EOVERFLOW)  // 75   (84 on macOS)
-#define QUIC_STATUS_HANDSHAKE_FAILURE \
-  ((QUIC_STATUS)ECONNABORTED)                         // 103  (53 on macOS)
-#define QUIC_STATUS_ABORTED ((QUIC_STATUS)ECANCELED)  // 125  (89 on macOS)
-#define QUIC_STATUS_ADDRESS_IN_USE \
-  ((QUIC_STATUS)EADDRINUSE)  // 98   (48 on macOS)
-#define QUIC_STATUS_CONNECTION_TIMEOUT \
-  ((QUIC_STATUS)ETIMEDOUT)                                // 110  (60 on macOS)
-#define QUIC_STATUS_CONNECTION_IDLE ((QUIC_STATUS)ETIME)  // 62   (101 on macOS)
-#define QUIC_STATUS_INTERNAL_ERROR ((QUIC_STATUS)EIO)     // 5
-#define QUIC_STATUS_CONNECTION_REFUSED \
-  ((QUIC_STATUS)ECONNREFUSED)                             // 111  (61 on macOS)
-#define QUIC_STATUS_PROTOCOL_ERROR ((QUIC_STATUS)EPROTO)  // 71   (100 on macOS)
-#define QUIC_STATUS_VER_NEG_ERROR \
-  ((QUIC_STATUS)EPROTONOSUPPORT)  // 93   (43 on macOS)
-#define QUIC_STATUS_UNREACHABLE \
-  ((QUIC_STATUS)EHOSTUNREACH)                        // 113  (65 on macOS)
-#define QUIC_STATUS_TLS_ERROR ((QUIC_STATUS)ENOKEY)  // 126
-#define QUIC_STATUS_USER_CANCELED \
-  ((QUIC_STATUS)EOWNERDEAD)  // 130  (105 on macOS)
-#define QUIC_STATUS_ALPN_NEG_FAILURE \
-  ((QUIC_STATUS)ENOPROTOOPT)  // 92   (42 on macOS)
-#define QUIC_STATUS_STREAM_LIMIT_REACHED ((QUIC_STATUS)ESTRPIPE)  // 86
+#define QUIC_STATUS_SUCCESS                 ((QUIC_STATUS)0)                // 0
+#define QUIC_STATUS_PENDING                 ((QUIC_STATUS)-2)               // -2
+#define QUIC_STATUS_CONTINUE                ((QUIC_STATUS)-1)               // -1
+#define QUIC_STATUS_OUT_OF_MEMORY           ((QUIC_STATUS)ENOMEM)           // 12
+#define QUIC_STATUS_INVALID_PARAMETER       ((QUIC_STATUS)EINVAL)           // 22
+#define QUIC_STATUS_INVALID_STATE           ((QUIC_STATUS)EPERM)            // 1
+#define QUIC_STATUS_NOT_SUPPORTED           ((QUIC_STATUS)EOPNOTSUPP)       // 95   (102 on macOS)
+#define QUIC_STATUS_NOT_FOUND               ((QUIC_STATUS)ENOENT)           // 2
+#define QUIC_STATUS_BUFFER_TOO_SMALL        ((QUIC_STATUS)EOVERFLOW)        // 75   (84 on macOS)
+#define QUIC_STATUS_HANDSHAKE_FAILURE       ((QUIC_STATUS)ECONNABORTED)     // 103  (53 on macOS)
+#define QUIC_STATUS_ABORTED                 ((QUIC_STATUS)ECANCELED)        // 125  (89 on macOS)
+#define QUIC_STATUS_ADDRESS_IN_USE          ((QUIC_STATUS)EADDRINUSE)       // 98   (48 on macOS)
+#define QUIC_STATUS_INVALID_ADDRESS         ((QUIC_STATUS)EAFNOSUPPORT)     // 97   (47 on macOS)
+#define QUIC_STATUS_CONNECTION_TIMEOUT      ((QUIC_STATUS)ETIMEDOUT)        // 110  (60 on macOS)
+#define QUIC_STATUS_CONNECTION_IDLE         ((QUIC_STATUS)ETIME)            // 62   (101 on macOS)
+#define QUIC_STATUS_INTERNAL_ERROR          ((QUIC_STATUS)EIO)              // 5
+#define QUIC_STATUS_CONNECTION_REFUSED      ((QUIC_STATUS)ECONNREFUSED)     // 111  (61 on macOS)
+#define QUIC_STATUS_PROTOCOL_ERROR          ((QUIC_STATUS)EPROTO)           // 71   (100 on macOS)
+#define QUIC_STATUS_VER_NEG_ERROR           ((QUIC_STATUS)EPROTONOSUPPORT)  // 93   (43 on macOS)
+#define QUIC_STATUS_UNREACHABLE             ((QUIC_STATUS)EHOSTUNREACH)     // 113  (65 on macOS)
+#define QUIC_STATUS_TLS_ERROR               ((QUIC_STATUS)ENOKEY)           // 126
+#define QUIC_STATUS_USER_CANCELED           ((QUIC_STATUS)EOWNERDEAD)       // 130  (105 on macOS)
+#define QUIC_STATUS_ALPN_NEG_FAILURE        ((QUIC_STATUS)ENOPROTOOPT)      // 92   (42 on macOS)
+#define QUIC_STATUS_STREAM_LIMIT_REACHED    ((QUIC_STATUS)ESTRPIPE)         // 86
 
-#define QUIC_STATUS_TLS_ALERT(Alert) \
-  ((QUIC_STATUS)(0xff & Alert) + TLS_ERROR_BASE)
+#define QUIC_STATUS_TLS_ALERT(Alert)        ((QUIC_STATUS)(0xff & Alert) + TLS_ERROR_BASE)
 
-#define QUIC_STATUS_CLOSE_NOTIFY \
-  QUIC_STATUS_TLS_ALERT(0)  // 0xBEBC300 - Close notify
-#define QUIC_STATUS_BAD_CERTIFICATE \
-  QUIC_STATUS_TLS_ALERT(42)  // 0xBEBC32A - Bad Certificate
-#define QUIC_STATUS_UNSUPPORTED_CERTIFICATE \
-  QUIC_STATUS_TLS_ALERT(43)  // 0xBEBC32B - Unsupported Certficiate
-#define QUIC_STATUS_REVOKED_CERTIFICATE \
-  QUIC_STATUS_TLS_ALERT(44)  // 0xBEBC32C - Revoked Certificate
-#define QUIC_STATUS_EXPIRED_CERTIFICATE \
-  QUIC_STATUS_TLS_ALERT(45)  // 0xBEBC32D - Expired Certificate
-#define QUIC_STATUS_UNKNOWN_CERTIFICATE \
-  QUIC_STATUS_TLS_ALERT(46)  // 0xBEBC32E - Unknown Certificate
+#define QUIC_STATUS_CLOSE_NOTIFY            QUIC_STATUS_TLS_ALERT(0)        // 0xBEBC300 - Close notify
+#define QUIC_STATUS_BAD_CERTIFICATE         QUIC_STATUS_TLS_ALERT(42)       // 0xBEBC32A - Bad Certificate
+#define QUIC_STATUS_UNSUPPORTED_CERTIFICATE QUIC_STATUS_TLS_ALERT(43)       // 0xBEBC32B - Unsupported Certficiate
+#define QUIC_STATUS_REVOKED_CERTIFICATE     QUIC_STATUS_TLS_ALERT(44)       // 0xBEBC32C - Revoked Certificate
+#define QUIC_STATUS_EXPIRED_CERTIFICATE     QUIC_STATUS_TLS_ALERT(45)       // 0xBEBC32D - Expired Certificate
+#define QUIC_STATUS_UNKNOWN_CERTIFICATE     QUIC_STATUS_TLS_ALERT(46)       // 0xBEBC32E - Unknown Certificate
+#define QUIC_STATUS_REQUIRED_CERTIFICATE    QUIC_STATUS_TLS_ALERT(116)      // 0xBEBC374 - Required Certificate
 
-#define QUIC_STATUS_CERT_ERROR(Val) ((QUIC_STATUS)Val + CERT_ERROR_BASE)
+#define QUIC_STATUS_CERT_ERROR(Val)         ((QUIC_STATUS)Val + CERT_ERROR_BASE)
 
-#define QUIC_STATUS_CERT_EXPIRED QUIC_STATUS_CERT_ERROR(1)         // 0xBEBC401
-#define QUIC_STATUS_CERT_UNTRUSTED_ROOT QUIC_STATUS_CERT_ERROR(2)  // 0xBEBC402
+#define QUIC_STATUS_CERT_EXPIRED            QUIC_STATUS_CERT_ERROR(1)       // 0xBEBC401
+#define QUIC_STATUS_CERT_UNTRUSTED_ROOT     QUIC_STATUS_CERT_ERROR(2)       // 0xBEBC402
 
 typedef unsigned char BOOLEAN;
 typedef struct in_addr IN_ADDR;
@@ -200,7 +185,11 @@ typedef union QUIC_ADDR {
   struct sockaddr_in6 Ipv6;
 } QUIC_ADDR;
 
-#define FIELD_OFFSET(type, field) offsetof(type, field)
+#ifndef RTL_FIELD_SIZE
+#define RTL_FIELD_SIZE(type, field)     (sizeof(((type *)0)->field))
+#endif
+
+#define FIELD_OFFSET(type, field)       offsetof(type, field)
 
 #define QUIC_ADDR_V4_PORT_OFFSET FIELD_OFFSET(struct sockaddr_in, sin_port)
 #define QUIC_ADDR_V4_IP_OFFSET FIELD_OFFSET(struct sockaddr_in, sin_addr)

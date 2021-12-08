@@ -254,13 +254,7 @@ CXPLAT_DATAPATH_UNREACHABLE_CALLBACK QuicBindingUnreachable;
 _IRQL_requires_max_(PASSIVE_LEVEL)
 QUIC_STATUS
 QuicBindingInitialize(
-#ifdef QUIC_COMPARTMENT_ID
-    _In_ QUIC_COMPARTMENT_ID CompartmentId,
-#endif
-    _In_ BOOLEAN ShareBinding,
-    _In_ BOOLEAN ServerOwned,
-    _In_opt_ const QUIC_ADDR* LocalAddress,
-    _In_opt_ const QUIC_ADDR* RemoteAddress,
+    _In_ const CXPLAT_UDP_CONFIG* UdpConfig,
     _Out_ QUIC_BINDING** NewBinding
     );
 
@@ -441,8 +435,7 @@ _IRQL_requires_max_(DISPATCH_LEVEL)
 QUIC_STATUS
 QuicBindingSend(
     _In_ QUIC_BINDING* Binding,
-    _In_ const QUIC_ADDR* LocalAddress,
-    _In_ const QUIC_ADDR* RemoteAddress,
+    _In_ const CXPLAT_ROUTE* Route,
     _In_ CXPLAT_SEND_DATA* SendData,
     _In_ uint32_t BytesToSend,
     _In_ uint32_t DatagramsToSend,

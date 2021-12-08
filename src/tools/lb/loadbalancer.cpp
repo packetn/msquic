@@ -29,10 +29,18 @@ struct LbInterface {
     QUIC_ADDR LocalAddress;
 
     LbInterface(_In_ const QUIC_ADDR* Address, bool IsPublic) : IsPublic(IsPublic) {
+        CXPLAT_UDP_CONFIG UdpConfig = {0};
+        UdpConfig.LocalAddress = nullptr;
+        UdpConfig.RemoteAddress = nullptr;
+        UdpConfig.Flags = 0;
+        UdpConfig.InterfaceIndex = 0;
+        UdpConfig.CallbackContext = this;
         if (IsPublic) {
-            CxPlatSocketCreateUdp(Datapath, Address, nullptr, this, 0, &Socket);
+            UdpConfig.LocalAddress = Address;
+            CxPlatSocketCreateUdp(Datapath, &UdpConfig, &Socket);
         } else {
-            CxPlatSocketCreateUdp(Datapath, nullptr, Address, this, 0, &Socket);
+            UdpConfig.RemoteAddress = Address;
+            CxPlatSocketCreateUdp(Datapath, &UdpConfig, &Socket);
         }
         if (!Socket) {
             printf("CxPlatSocketCreateUdp failed.\n");
@@ -53,16 +61,19 @@ struct LbInterface {
             CxPlatSocketGetRemoteAddress(Socket, &RemoteAddress);
             PeerAddress = &RemoteAddress;
         }
+        CXPLAT_ROUTE Route;
+        Route.LocalAddress = LocalAddress;
+        Route.RemoteAddress = *PeerAddress;
         CXPLAT_SEND_DATA* Send = nullptr;
         while (RecvDataChain) {
             if (!Send) {
-                Send = CxPlatSendDataAlloc(Socket, CXPLAT_ECN_NON_ECT, MAX_UDP_PAYLOAD_LENGTH);
+                Send = CxPlatSendDataAlloc(Socket, CXPLAT_ECN_NON_ECT, MAX_UDP_PAYLOAD_LENGTH, &Route);
             }
             if (Send) {
                 auto Buffer = CxPlatSendDataAllocBuffer(Send, MAX_UDP_PAYLOAD_LENGTH);
                 if (!Buffer) {
-                    (void)CxPlatSocketSend(Socket, &LocalAddress, PeerAddress, Send, 0);
-                    Send = CxPlatSendDataAlloc(Socket, CXPLAT_ECN_NON_ECT, MAX_UDP_PAYLOAD_LENGTH);
+                    (void)CxPlatSocketSend(Socket, &Route, Send, 0);
+                    Send = CxPlatSendDataAlloc(Socket, CXPLAT_ECN_NON_ECT, MAX_UDP_PAYLOAD_LENGTH, &Route);
                     if (Send) {
                         Buffer = CxPlatSendDataAllocBuffer(Send, MAX_UDP_PAYLOAD_LENGTH);
                     }
@@ -75,7 +86,7 @@ struct LbInterface {
             RecvDataChain = RecvDataChain->Next;
         }
         if (Send) {
-            (void)CxPlatSocketSend(Socket, &LocalAddress, PeerAddress, Send, 0);
+            (void)CxPlatSocketSend(Socket, &Route, Send, 0);
         }
     }
 };
@@ -140,8 +151,8 @@ struct LbPublicInterface : public LbInterface {
     void Receive(_In_ CXPLAT_RECV_DATA* RecvDataChain) {
         auto PrivateInterface =
             GetPrivateInterface(
-                &RecvDataChain->Tuple->LocalAddress,
-                &RecvDataChain->Tuple->RemoteAddress);
+                &RecvDataChain->Route->LocalAddress,
+                &RecvDataChain->Route->RemoteAddress);
         PrivateInterface->Send(RecvDataChain);
     }
 

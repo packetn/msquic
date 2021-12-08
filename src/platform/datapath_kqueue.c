@@ -16,12 +16,12 @@ Environment:
 #define __APPLE_USE_RFC_3542 1
 // See netinet6/in6.h:46 for an explanation
 #include "platform_internal.h"
-#include <sys/types.h>
+#include <fcntl.h>
+#include <sys/event.h>
 #include <sys/socket.h>
 #include <sys/sysctl.h>
-#include <sys/event.h>
 #include <sys/time.h>
-#include <fcntl.h>
+#include <sys/types.h>
 #ifdef QUIC_CLOG
 #include "datapath_kqueue.c.clog.h"
 #endif
@@ -54,10 +54,9 @@ typedef struct CXPLAT_DATAPATH_RECV_BLOCK {
     CXPLAT_RECV_DATA RecvPacket;
 
     //
-    // Represents the address (source and destination) information of the
-    // packet.
+    // Represents the network route.
     //
-    CXPLAT_TUPLE Tuple;
+    CXPLAT_ROUTE Route;
 
     //
     // Buffer that actually stores the UDP payload.
@@ -667,6 +666,22 @@ CxPlatDataPathPopulateTargetAddress(
     CXPLAT_FRE_ASSERT(FALSE);
 }
 
+_IRQL_requires_max_(PASSIVE_LEVEL)
+_Success_(QUIC_SUCCEEDED(return))
+QUIC_STATUS
+CxPlatDataPathGetLocalAddresses(
+    _In_ CXPLAT_DATAPATH* Datapath,
+    _Outptr_ _At_(*Addresses, __drv_allocatesMem(Mem))
+        CXPLAT_ADAPTER_ADDRESS** Addresses,
+    _Out_ uint32_t* AddressesCount
+    )
+{
+    UNREFERENCED_PARAMETER(Datapath);
+    *Addresses = NULL;
+    *AddressesCount = 0;
+    return QUIC_STATUS_NOT_SUPPORTED;
+}
+
 QUIC_STATUS
 CxPlatDataPathGetGatewayAddresses(
     _In_ CXPLAT_DATAPATH* Datapath,
@@ -943,7 +958,7 @@ CxPlatSocketContextInitialize(
             SocketContext->SocketFd,
             F_SETFL,
             Flags);
-    if (Flags < 0) {
+    if (Result < 0) {
         Status = errno;
         QuicTraceEvent(
             DatapathErrorStatus,
@@ -1096,13 +1111,13 @@ CxPlatSocketContextPrepareReceive(
 
     SocketContext->RecvIov.iov_base = SocketContext->CurrentRecvBlock->RecvPacket.Buffer;
     SocketContext->CurrentRecvBlock->RecvPacket.BufferLength = SocketContext->RecvIov.iov_len;
-    SocketContext->CurrentRecvBlock->RecvPacket.Tuple = &SocketContext->CurrentRecvBlock->Tuple;
+    SocketContext->CurrentRecvBlock->RecvPacket.Route = &SocketContext->CurrentRecvBlock->Route;
 
     CxPlatZeroMemory(&SocketContext->RecvMsgHdr, sizeof(SocketContext->RecvMsgHdr));
     CxPlatZeroMemory(&SocketContext->RecvMsgControl, sizeof(SocketContext->RecvMsgControl));
 
-    SocketContext->RecvMsgHdr.msg_name = &SocketContext->CurrentRecvBlock->RecvPacket.Tuple->RemoteAddress;
-    SocketContext->RecvMsgHdr.msg_namelen = sizeof(SocketContext->CurrentRecvBlock->RecvPacket.Tuple->RemoteAddress);
+    SocketContext->RecvMsgHdr.msg_name = &SocketContext->CurrentRecvBlock->RecvPacket.Route->RemoteAddress;
+    SocketContext->RecvMsgHdr.msg_namelen = sizeof(SocketContext->CurrentRecvBlock->RecvPacket.Route->RemoteAddress);
     SocketContext->RecvMsgHdr.msg_iov = &SocketContext->RecvIov;
     SocketContext->RecvMsgHdr.msg_iovlen = 1;
     SocketContext->RecvMsgHdr.msg_control = SocketContext->RecvMsgControl;
@@ -1175,11 +1190,11 @@ CxPlatSocketContextRecvComplete(
 
     BOOLEAN FoundLocalAddr = FALSE;
     BOOLEAN FoundTOS = FALSE;
-    QUIC_ADDR* LocalAddr = &RecvPacket->Tuple->LocalAddress;
+    QUIC_ADDR* LocalAddr = &RecvPacket->Route->LocalAddress;
     if (LocalAddr->Ipv6.sin6_family == AF_INET6) {
         LocalAddr->Ipv6.sin6_family = QUIC_ADDRESS_FAMILY_INET6;
     }
-    QUIC_ADDR* RemoteAddr = &RecvPacket->Tuple->RemoteAddress;
+    QUIC_ADDR* RemoteAddr = &RecvPacket->Route->RemoteAddress;
     if (RemoteAddr->Ipv6.sin6_family == AF_INET6) {
         RemoteAddr->Ipv6.sin6_family = QUIC_ADDRESS_FAMILY_INET6;
         CxPlatConvertFromMappedV6(RemoteAddr, RemoteAddr);
@@ -1254,9 +1269,10 @@ CxPlatSocketContextRecvComplete(
     int32_t RetryCount = 0;
     do {
         Status = CxPlatSocketContextPrepareReceive(SocketContext);
-    } while (!QUIC_SUCCEEDED(Status) && RetryCount < 10);
+    } while (!QUIC_SUCCEEDED(Status) && ++RetryCount < 10);
 
     if (!QUIC_SUCCEEDED(Status)) {
+        CXPLAT_DBG_ASSERT(Status == QUIC_STATUS_OUT_OF_MEMORY);
         QuicTraceEvent(
             DatapathErrorStatus,
             "[data][%p] ERROR, %u, %s.",
@@ -1417,18 +1433,15 @@ CxPlatSocketContextProcessEvents(
 QUIC_STATUS
 CxPlatSocketCreateUdp(
     _In_ CXPLAT_DATAPATH* Datapath,
-    _In_opt_ const QUIC_ADDR* LocalAddress,
-    _In_opt_ const QUIC_ADDR* RemoteAddress,
-    _In_opt_ void* RecvCallbackContext,
-    _In_ uint32_t InternalFlags,
+    _In_ const CXPLAT_UDP_CONFIG* Config,
     _Out_ CXPLAT_SOCKET** NewBinding
     )
 {
     QUIC_STATUS Status = QUIC_STATUS_SUCCESS;
-    BOOLEAN IsServerSocket = RemoteAddress == NULL;
+    BOOLEAN IsServerSocket = Config->RemoteAddress == NULL;
     int32_t SuccessfulStartReceives = -1;
 
-    CXPLAT_DBG_ASSERT(Datapath->UdpHandlers.Receive != NULL || InternalFlags & CXPLAT_SOCKET_FLAG_PCP);
+    CXPLAT_DBG_ASSERT(Datapath->UdpHandlers.Receive != NULL || Config->Flags & CXPLAT_SOCKET_FLAG_PCP);
 
     uint32_t SocketCount = IsServerSocket ? Datapath->ProcCount : 1;
     uint32_t CurrentProc = CxPlatProcCurrentNumber() % Datapath->ProcCount;
@@ -1453,17 +1466,17 @@ CxPlatSocketCreateUdp(
         DatapathCreated,
         "[data][%p] Created, local=%!ADDR!, remote=%!ADDR!",
         Binding,
-        CASTED_CLOG_BYTEARRAY(LocalAddress ? sizeof(*LocalAddress) : 0, LocalAddress),
-        CASTED_CLOG_BYTEARRAY(RemoteAddress ? sizeof(*RemoteAddress) : 0, RemoteAddress));
+        CASTED_CLOG_BYTEARRAY(Config->LocalAddress ? sizeof(*Config->LocalAddress) : 0, Config->LocalAddress),
+        CASTED_CLOG_BYTEARRAY(Config->RemoteAddress ? sizeof(*Config->RemoteAddress) : 0, Config->RemoteAddress));
 
     CxPlatZeroMemory(Binding, BindingLength);
     Binding->Datapath = Datapath;
-    Binding->ClientContext = RecvCallbackContext;
-    Binding->HasFixedRemoteAddress = (RemoteAddress != NULL);
+    Binding->ClientContext = Config->CallbackContext;
+    Binding->HasFixedRemoteAddress = (Config->RemoteAddress != NULL);
     Binding->Mtu = CXPLAT_MAX_MTU;
     CxPlatRundownInitialize(&Binding->Rundown);
-    if (LocalAddress) {
-        CxPlatConvertToMappedV6(LocalAddress, &Binding->LocalAddress);
+    if (Config->LocalAddress) {
+        CxPlatConvertToMappedV6(Config->LocalAddress, &Binding->LocalAddress);
     } else {
         Binding->LocalAddress.Ip.sa_family = QUIC_ADDRESS_FAMILY_INET6;
     }
@@ -1479,7 +1492,7 @@ CxPlatSocketCreateUdp(
     }
 
     CxPlatRundownAcquire(&Datapath->BindingsRundown);
-    if (InternalFlags & CXPLAT_SOCKET_FLAG_PCP) {
+    if (Config->Flags & CXPLAT_SOCKET_FLAG_PCP) {
         Binding->PcpBinding = TRUE;
     }
 
@@ -1487,8 +1500,8 @@ CxPlatSocketCreateUdp(
         Status =
             CxPlatSocketContextInitialize(
                 &Binding->SocketContexts[i],
-                LocalAddress,
-                RemoteAddress);
+                Config->LocalAddress,
+                Config->RemoteAddress);
         if (QUIC_FAILED(Status)) {
             goto Exit;
         }
@@ -1497,8 +1510,8 @@ CxPlatSocketCreateUdp(
     CxPlatConvertFromMappedV6(&Binding->LocalAddress, &Binding->LocalAddress);
     Binding->LocalAddress.Ipv6.sin6_scope_id = 0;
 
-    if (RemoteAddress != NULL) {
-        Binding->RemoteAddress = *RemoteAddress;
+    if (Config->RemoteAddress != NULL) {
+        Binding->RemoteAddress = *Config->RemoteAddress;
     } else {
         Binding->RemoteAddress.Ipv4.sin_port = 0;
     }
@@ -1735,9 +1748,11 @@ CXPLAT_SEND_DATA*
 CxPlatSendDataAlloc(
     _In_ CXPLAT_SOCKET* Socket,
     _In_ CXPLAT_ECN_TYPE ECN,
-    _In_ uint16_t MaxPacketSize
+    _In_ uint16_t MaxPacketSize,
+    _Inout_ CXPLAT_ROUTE* Route
     )
 {
+    UNREFERENCED_PARAMETER(Route);
     CXPLAT_DBG_ASSERT(Socket != NULL);
 
     CXPLAT_DATAPATH_PROC_CONTEXT* DatapathProc =
@@ -2222,8 +2237,7 @@ Exit:
 QUIC_STATUS
 CxPlatSocketSend(
     _In_ CXPLAT_SOCKET* Socket,
-    _In_ const QUIC_ADDR* LocalAddress,
-    _In_ const QUIC_ADDR* RemoteAddress,
+    _In_ const CXPLAT_ROUTE* Route,
     _In_ CXPLAT_SEND_DATA* SendData,
     _In_ uint16_t IdealProcessor
     )
@@ -2232,8 +2246,8 @@ CxPlatSocketSend(
     QUIC_STATUS Status =
         CxPlatSocketSendInternal(
             Socket,
-            LocalAddress,
-            RemoteAddress,
+            &Route->LocalAddress,
+            &Route->RemoteAddress,
             SendData,
             FALSE);
     if (Status == QUIC_STATUS_PENDING) {

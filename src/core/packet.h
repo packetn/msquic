@@ -247,20 +247,43 @@ _IRQL_requires_max_(DISPATCH_LEVEL) _Success_(return != FALSE) BOOLEAN
 //
 _IRQL_requires_max_(DISPATCH_LEVEL) void QuicPacketDecodeRetryTokenV1(
     _In_ const CXPLAT_RECV_PACKET* const Packet,
-    _Outptr_result_buffer_maybenull_(*TokenLength) const uint8_t** Token,
-    _Out_ uint16_t* TokenLength);
+    _Outptr_result_buffer_maybenull_(*TokenLength)
+        const uint8_t** Token,
+    _Out_ uint16_t* TokenLength
+    );
 
-_IRQL_requires_max_(DISPATCH_LEVEL) _Success_(return != FALSE) BOOLEAN
-    QuicPacketValidateShortHeaderV1(
-        _In_ const void* Owner,  // Binding or Connection depending on state
-        _Inout_ CXPLAT_RECV_PACKET* Packet);
+_IRQL_requires_max_(DISPATCH_LEVEL)
+BOOLEAN
+QuicPacketValidateRetryToken(
+    _In_ const void* const Owner,
+    _In_ const CXPLAT_RECV_PACKET* const Packet,
+    _In_ uint16_t TokenLength,
+    _In_reads_(TokenLength)
+        const uint8_t* TokenBuffer
+    );
 
-inline _IRQL_requires_max_(DISPATCH_LEVEL) void QuicPktNumEncode(
-    _In_ uint64_t PacketNumber, _In_range_(1, 4) uint8_t PacketNumberLength,
-    _Out_writes_bytes_(PacketNumberLength) uint8_t* Buffer) {
-  for (uint8_t i = 0; i < PacketNumberLength; i++) {
-    Buffer[PacketNumberLength - i - 1] = ((uint8_t*)&PacketNumber)[i];
-  }
+_IRQL_requires_max_(DISPATCH_LEVEL)
+_Success_(return != FALSE)
+BOOLEAN
+QuicPacketValidateShortHeaderV1(
+    _In_ const void* Owner, // Binding or Connection depending on state
+    _Inout_ CXPLAT_RECV_PACKET* Packet
+    );
+
+inline
+_IRQL_requires_max_(DISPATCH_LEVEL)
+void
+QuicPktNumEncode(
+    _In_ uint64_t PacketNumber,
+    _In_range_(1, 4)
+        uint8_t PacketNumberLength,
+    _Out_writes_bytes_(PacketNumberLength)
+        uint8_t* Buffer
+    )
+{
+    for (uint8_t i = 0; i < PacketNumberLength; i++) {
+        Buffer[PacketNumberLength - i - 1] = ((uint8_t*)&PacketNumber)[i];
+    }
 }
 
 inline _IRQL_requires_max_(DISPATCH_LEVEL) void QuicPktNumDecode(

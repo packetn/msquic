@@ -202,6 +202,8 @@ InterlockedIncrement64(
     return __sync_add_and_fetch(Addend, (int64_t)1);
 }
 
+#define QuicReadPtrNoFence(p) ((void*)(*p)) // TODO
+
 //
 // Assertion interfaces.
 //
@@ -209,7 +211,9 @@ InterlockedIncrement64(
 __attribute__((noinline, noreturn))
 void
 quic_bugcheck(
-    void
+    _In_z_ const char* File,
+    _In_ int Line,
+    _In_z_ const char* Expr
     );
 
 void
@@ -222,7 +226,7 @@ CxPlatLogAssert(
 #define CXPLAT_STATIC_ASSERT(X,Y) static_assert(X, Y);
 #define CXPLAT_ANALYSIS_ASSERT(X)
 #define CXPLAT_ANALYSIS_ASSUME(X)
-#define CXPLAT_FRE_ASSERT(exp) ((exp) ? (void)0 : (CxPlatLogAssert(__FILE__, __LINE__, #exp), quic_bugcheck()));
+#define CXPLAT_FRE_ASSERT(exp) ((exp) ? (void)0 : (CxPlatLogAssert(__FILE__, __LINE__, #exp), quic_bugcheck(__FILE__, __LINE__, #exp)));
 #define CXPLAT_FRE_ASSERTMSG(exp, Y) CXPLAT_FRE_ASSERT(exp)
 
 #ifdef DEBUG
@@ -934,15 +938,10 @@ CxPlatCurThreadID(
 // Processor Count and Index.
 //
 
-uint32_t
-CxPlatProcMaxCount(
-    void
-    );
+extern uint32_t CxPlatProcessorCount;
 
-uint32_t
-CxPlatProcActiveCount(
-    void
-    );
+#define CxPlatProcMaxCount() CxPlatProcessorCount
+#define CxPlatProcActiveCount() CxPlatProcessorCount
 
 uint32_t
 CxPlatProcCurrentNumber(

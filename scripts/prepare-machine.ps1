@@ -35,7 +35,7 @@ on the provided configuration.
 
 param (
     [Parameter(Mandatory = $true)]
-    [ValidateSet("Build", "Test", "Dev")]
+    [ValidateSet("Build", "Test", "Dev", "OneBranch", "OneBranchPackage")]
     [string]$Configuration,
 
     [Parameter(Mandatory = $false)]
@@ -57,7 +57,13 @@ param (
     [switch]$TestCertificates,
 
     [Parameter(Mandatory = $false)]
-    [switch]$SignCode
+    [switch]$SignCode,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$DuoNic,
+
+    [Parameter(Mandatory = $false)]
+    [switch]$NoCodeCoverage
 )
 
 #Requires -RunAsAdministrator
@@ -133,7 +139,47 @@ function Install-ClogTool {
     }
 }
 
-if (($Configuration -eq "Dev") -or ($Configuration -eq "Build")) {
+$ArtifactsPath = Join-Path $RootDir "artifacts"
+$CoreNetCiPath = Join-Path $ArtifactsPath "corenet-ci-main"
+$SetupPath = Join-Path $CoreNetCiPath "vm-setup"
+
+function Download-CoreNet-Deps {
+    # Download and extract https://github.com/microsoft/corenet-ci.
+    if (!(Test-Path $ArtifactsPath)) { mkdir $ArtifactsPath }
+    if (!(Test-Path $CoreNetCiPath)) {
+        $ZipPath = Join-Path $ArtifactsPath "corenet-ci.zip"
+        Invoke-WebRequest -Uri "https://github.com/microsoft/corenet-ci/archive/refs/heads/main.zip" -OutFile $ZipPath
+        Expand-Archive -Path $ZipPath -DestinationPath $ArtifactsPath -Force
+        Remove-Item -Path $ZipPath
+    }
+}
+
+# Installs DuoNic from the CoreNet-CI repo.
+function Install-DuoNic {
+    # Check to see if test signing is enabled.
+    $HasTestSigning = $false
+    try { $HasTestSigning = ("$(bcdedit)" | Select-String -Pattern "testsigning\s+Yes").Matches.Success } catch { }
+    if (!$HasTestSigning) { Write-Error "Test Signing Not Enabled!" }
+
+    # Download the CI repo that contains DuoNic.
+    Write-Host "Downloading CoreNet-CI"
+    Download-CoreNet-Deps
+
+    # Install the test root certificate.
+    Write-Host "Installing test root certificate"
+    $RootCertPath = Join-Path $SetupPath "testroot-sha2.cer"
+    if (!(Test-Path $RootCertPath)) { Write-Error "Missing file: $RootCertPath" }
+    certutil.exe -addstore -f "Root" $RootCertPath
+
+    # Install the DuoNic driver.
+    Write-Host "Installing DuoNic driver"
+    $DuoNicPath = Join-Path $SetupPath duonic
+    $DuoNicScript = (Join-Path $DuoNicPath duonic.ps1)
+    if (!(Test-Path $DuoNicScript)) { Write-Error "Missing file: $DuoNicScript" }
+    Invoke-Expression "cmd /c `"pushd $DuoNicPath && pwsh duonic.ps1 -Install`""
+}
+
+if (($Configuration -eq "Dev")) {
     Install-ClogTool "Microsoft.Logging.CLOG"
 }
 
@@ -164,8 +210,30 @@ if ($IsWindows) {
             Expand-Archive -Path "build\nasm.zip" -DestinationPath $env:Programfiles -Force
             $CurrentSystemPath = [Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::Machine)
             $CurrentSystemPath = "$CurrentSystemPath;$NasmPath"
+            $env:PATH = "${env:PATH};$NasmPath"
             [Environment]::SetEnvironmentVariable("PATH", $CurrentSystemPath, [System.EnvironmentVariableTarget]::Machine)
-            Write-Host "##vso[task.setvariable variable=PATH;]${env:PATH};$NasmPath"
+            Write-Host "##vso[task.setvariable variable=PATH;]${env:PATH}"
+            Write-Host "PATH has been updated. You'll need to restart your terminal for this to take affect."
+        }
+
+        $JomVersion = "1_1_3"
+        $JomPath = Join-Path $env:Programfiles "jom_$JomVersion"
+        $JomExe = Join-Path $JomPath "jom.exe"
+        if (!(Test-Path $JomExe)) {
+            New-Item -Path .\build -ItemType Directory -Force
+            try {
+                Invoke-WebRequest -Uri "https://qt.mirror.constant.com/official_releases/jom/jom_$JomVersion.zip" -OutFile "build\jom.zip"
+
+            } catch {
+                Invoke-WebRequest -Uri "https://mirrors.ocf.berkeley.edu/qt/official_releases/jom/jom_$JomVersion.zip" -OutFile "build\jom.zip"
+            }
+            New-Item -Path $JomPath -ItemType Directory -Force
+            Expand-Archive -Path "build\jom.zip" -DestinationPath $JomPath -Force
+            $CurrentSystemPath = [Environment]::GetEnvironmentVariable("PATH", [System.EnvironmentVariableTarget]::Machine)
+            $CurrentSystemPath = "$CurrentSystemPath;$JomPath"
+            $env:PATH = "${env:PATH};$JomPath"
+            [Environment]::SetEnvironmentVariable("PATH", $CurrentSystemPath, [System.EnvironmentVariableTarget]::Machine)
+            Write-Host "##vso[task.setvariable variable=PATH;]${env:PATH}"
             Write-Host "PATH has been updated. You'll need to restart your terminal for this to take affect."
         }
     }
@@ -260,7 +328,7 @@ if ($IsWindows) {
             }
         }
         # Install OpenCppCoverage on test machines
-        if (!(Test-Path "C:\Program Files\OpenCppCoverage\OpenCppCoverage.exe")) {
+        if (!$NoCodeCoverage -and !(Test-Path "C:\Program Files\OpenCppCoverage\OpenCppCoverage.exe")) {
             # Download the installer.
             $Installer = $null
             if ([System.Environment]::Is64BitOperatingSystem) {
@@ -278,6 +346,9 @@ if ($IsWindows) {
 
             # Delete the installer.
             Remove-Item -Path $ExeFile
+        }
+        if ($DuoNic) {
+            Install-DuoNic
         }
     }
 
@@ -323,6 +394,28 @@ if ($IsWindows) {
 
             Install-ClogTool "Microsoft.Logging.CLOG2Text.Lttng"
         }
+        "OneBranch" {
+            sudo apt-add-repository ppa:lttng/stable-2.12
+            sh -c "wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | sudo tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null"
+            sh -c "echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ bionic main' | sudo tee /etc/apt/sources.list.d/kitware.list >/dev/null"
+            sudo apt-get update
+            sudo apt-get install -y cmake
+            sudo apt-get install -y build-essential
+            sudo apt-get install -y liblttng-ust-dev
+            sudo apt-get install -y lttng-tools
+            sudo apt-get install -y libssl-dev
+        }
+        "OneBranchPackage" {
+            sudo apt-get update
+            # used for packaging
+            sudo apt-get install -y ruby ruby-dev rpm
+            sudo gem install fpm
+        }
+    }
+} elseif ($IsMacOS) {
+    if ($Configuration -eq "Test") {
+        Write-Host "[$(Get-Date)] Setting core dump pattern..."
+        sudo sysctl -w kern.corefile=%N.%P.%H.core
     }
 }
 

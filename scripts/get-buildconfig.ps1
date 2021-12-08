@@ -26,11 +26,11 @@ param (
     [string]$Config = "Debug",
 
     [Parameter(Mandatory = $false)]
-    [ValidateSet("x86", "x64", "arm", "arm64", "")]
+    [ValidateSet("x86", "x64", "arm", "arm64", "arm64ec", "universal", "")]
     [string]$Arch = "",
 
     [Parameter(Mandatory = $false)]
-    [ValidateSet("uwp", "windows", "linux", "macos", "")] # For future expansion
+    [ValidateSet("gamecore_console", "uwp", "windows", "linux", "macos", "android", "ios", "")] # For future expansion
     [string]$Platform = "",
 
     [Parameter(Mandatory = $false)]
@@ -43,6 +43,24 @@ param (
 
 Set-StrictMode -Version 'Latest'
 $PSDefaultParameterValues['*:ErrorAction'] = 'Stop'
+
+if ($Platform -eq "android") {
+    if (!$IsLinux) {
+        Write-Error "Can only build android on linux"
+    }
+    if ($Arch -eq "") {
+        $Arch = "arm64"
+    }
+}
+
+if ($Platform -eq "ios") {
+    if (!$IsMacOS) {
+        Write-Error  "Can only build ios on macOS"
+    }
+    if ($Arch -eq "") {
+        $Arch = "arm64"
+    }
+}
 
 if ("" -eq $Arch) {
     if ($IsMacOS) {

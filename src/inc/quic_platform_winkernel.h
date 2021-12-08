@@ -361,6 +361,7 @@ typedef struct CXPLAT_DISPATCH_RW_LOCK {
 #define QuicCompareExchangeLongPtrNoFence InterlockedCompareExchangeNoFence
 #define QuicReadLongPtrNoFence ReadNoFence
 #endif
+#define QuicReadPtrNoFence ReadPointerNoFence
 
 typedef LONG_PTR CXPLAT_REF_COUNT;
 
@@ -847,6 +848,17 @@ CxPlatRandom(
     _In_ uint32_t BufferLen,
     _Out_writes_bytes_(BufferLen) void* Buffer
     );
+
+//
+// Process object abstraction
+//
+#define QUIC_OWNING_PROCESS 1
+
+#define QUIC_PROCESS PEPROCESS
+
+#define QuicProcessGetCurrentProcess() ((QUIC_PROCESS)PsGetCurrentProcess())
+#define QuicProcessAddRef(Process) if (Process != NULL) { ObReferenceObjectWithTag(Process, QUIC_POOL_PROCESS); }
+#define QuicProcessRelease(Process) if (Process != NULL) { ObDereferenceObjectWithTag(Process, QUIC_POOL_PROCESS); }
 
 //
 // Silo interfaces
